@@ -3,6 +3,9 @@
 # Auto NTFS Fix System for Arch Linux
 # Automatically detects and repairs NTFS drives when plugged in
 # Similar to Windows "scan and repair" functionality
+# 
+# WARNING: This is a basic implementation that may need adjustment
+# Test thoroughly before relying on it for important data
 
 set -euo pipefail
 
@@ -230,8 +233,9 @@ if [[ "${1:-}" == "install" ]]; then
     # Create udev rule
     cat > /etc/udev/rules.d/99-ntfs-autofix.rules << 'EOF'
 # Auto-fix NTFS filesystems when USB devices are plugged in
+# Note: May need adjustment based on your specific hardware
 ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_TYPE}=="ntfs", RUN+="/usr/local/bin/ntfs-autofix"
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ATTRS{removable}=="1", RUN+="/usr/local/bin/ntfs-autofix"
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ATTRS{removable}=="1", ENV{DEVNAME}!="", RUN+="/bin/bash -c 'sleep 3 && /usr/local/bin/ntfs-autofix'"
 EOF
     
     # Reload udev rules
