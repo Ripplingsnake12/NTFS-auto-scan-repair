@@ -113,15 +113,35 @@ send_notification() {
     local message="$2"
     local icon="${3:-dialog-information}"
     
-    # Find active user session
-    local user_session
-    user_session=$(who | grep "(:0)" | head -n1 | awk '{print $1}' || echo "")
+    # Try to find the active user's session
+    local user_info
+    user_info=$(loginctl show-session $(loginctl | grep $(whoami) | awk '{print $1}') -p Display -p XAuthority -p RuntimePath 2>/dev/null)
     
-    if [[ -n "$user_session" ]]; then
+    local display=$(echo "$user_info" | grep "Display=" | cut -d'=' -f2)
+    local xauthority=$(echo "$user_info" | grep "XAuthority=" | cut -d'=' -f2)
+    local runtime_path=$(echo "$user_info" | grep "RuntimePath=" | cut -d'=' -f2)
+
+    # Fallback for XAuthority if not directly available, common for newer systems
+    if [[ -z "$xauthority" ]] && [[ -n "$runtime_path" ]]; then
+        xauthority="$runtime_path/xauthority"
+    fi
+
+    # Determine the user who is logged in graphically
+    local graphical_user
+    graphical_user=$(loginctl list-sessions --no-legend | grep "active" | awk '{print $3}' | head -n1)
+
+    if [[ -n "$graphical_user" ]] && [[ -n "$display" ]] && [[ -n "$xauthority" ]]; then
+        log "Sending notification to user $graphical_user on $display using $xauthority"
         # Send notification via notify-send as the logged-in user
-        sudo -u "$user_session" DISPLAY=:0 notify-send "$title" "$message" --icon="$icon" 2>/dev/null || true
+        # Set DISPLAY and XAUTHORITY explicitly
+        sudo -u "$graphical_user" DISPLAY="$display" XAUTHORITY="$xauthority" notify-send "$title" "$message" --icon="$icon" 2>/dev/null || {
+            log "WARNING: Failed to send notification via notify-send. Is 'notify-send' installed and is a graphical session active?"
+        }
+    else
+        log "WARNING: Could not determine active graphical user session for notifications."
     fi
 }
+
 
 # Process a single device
 process_device() {
